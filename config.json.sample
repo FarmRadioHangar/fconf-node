@@ -1,0 +1,16 @@
+{
+	"configStateDir": "/etc/fconf",
+	"configDefaultsDir": "/etc/fconf/defaults",
+	"fconfPath": "/usr/local/bin/fconf",
+	"fdevicesUrl": "ws://localhost:8090/",
+	"restPort": 8999,
+	"webSocketPort": 9001,
+	"adminEmail": "damjan@farmradio.org",
+	"mailParams": {
+		"smtpHost": "smtp.gmail.com",
+		"username": "fessbox-proto@uliza.fm",
+		"password": "",
+		"ssl": true,
+		"from": "fessbox-proto@uliza.fm"
+	}
+}
