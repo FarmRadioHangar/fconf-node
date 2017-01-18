@@ -1,5 +1,6 @@
 var WebSocketServer = require('ws').Server;
 var fconf = require('./fconf');
+var myLib = require('./myLib');
 
 WebSocketServer.prototype.broadcast = function (data) {
 	this.clients.forEach(function each(client) {

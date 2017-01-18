@@ -61,6 +61,39 @@ exports.updateWiFi = function (params, response) {
 };
 
 exports.updateEthernet = function (params, response) {
+	console.error('params:', params);
+	if (!myLib.checkObjectProperties(params, ['name'])) {
+		handleFailure(response, "invalid input");
+		return;
+	}
+	var args = ['ethernet'];
+
+	if (params.enabled) {
+		if (s.fconf[params.name] && s.fconf[params.name].enabled) {
+		} else {
+			args.push('--enable');
+		}
+	} else if (s.fconf[params.name] && s.fconf[params.name].enabled) {
+		args.push('--disable');
+		// todo: handle special case when both config and disable should be applied, passing both to binary will fail
+	}
+
+	if (params.config) {
+		args.push('--config=stdin');
+	}
+	fconfExec(args, params.config, (error) => {
+		if (error) {
+			handleFailure(response, error);
+		} else {
+			var responseData = { interfaceUpdate: {} };
+			responseData.interfaceUpdate[params.name] = s.fconf[params.name];
+			if (typeof response === 'function') {
+				response(null, responseData);
+			} else {
+				myLib.httpGeneric(200, responseData, response);
+			}
+		}
+	});
 
 };
 
@@ -74,7 +107,7 @@ exports.update4g = function (params, response) {
 
 exports.getCurrentState = function (params, response) {
 	if (typeof response === 'function') {
-		response(null, s.fconf);
+		response(null, { interfaceInit: s.fconf });
 	} else {
 		myLib.httpGeneric(200, JSON.stringify(s.fconf), response, "DEBUG::getCurrentState");
 	}
