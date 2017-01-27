@@ -18,7 +18,7 @@ var fconf = require("./fconf");
 var fdevice = require("./fdevice");
 var websocket = require('./webSocketServer');
 
-websocket.startListener({ port: appConfig.webSocketPort });
+exports.wsBroadcast = websocket.startListener({ port: appConfig.webSocketPort });
 
 /*
 // rest server

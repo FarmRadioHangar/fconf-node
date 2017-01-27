@@ -124,7 +124,7 @@ exports.checkObjectProperties = function (params, required) {
 			return true;
 		} else if (Array.isArray(required)) {
 			for (var i in required) {
-				if (!params[required[i]]) {
+				if (!params.hasOwnProperty(required[i]) || params[required[i]] === undefined) {
 					return false;
 				}
 			}

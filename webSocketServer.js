@@ -8,9 +8,9 @@ WebSocketServer.prototype.broadcast = function (data) {
 	});
 };
 
+var uiListener;
 exports.startListener = function(options) {
-	var uiListener = new WebSocketServer(options);
-
+	uiListener = new WebSocketServer(options);
 	uiListener.on('connection', function connection(ws) {
 		//var location = url.parse(ws.upgradeReq.url, true);
 
@@ -64,5 +64,11 @@ exports.startListener = function(options) {
 			}
 		});
 	});
-	return uiListener;
+	return uiListener.broadcast;
 }
+
+exports.broadcast = function(data) {
+	if (uiListener) {
+		uiListener.broadcast(data);
+	}
+};
