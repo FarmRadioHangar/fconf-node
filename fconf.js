@@ -1,3 +1,4 @@
+var os = require("os");
 var fs = require("fs");
 var child_process = require('child_process');
 var appConfig = require("./config.json");
@@ -186,9 +187,9 @@ exports.interfaceType = function (params, response) {
 	if (!myLib.checkObjectProperties(params, ['name', 'type'])) {
 		handleFailure(response, "invalid input");
 	} else {
-		if (s.fconf[params,name]) {
-			s.fconf[params,name].type = params.type;
-			s.fconf[params,name].defaults = s.fconf_defaults[params.type],
+		if (s.fconf[params.name]) {
+			s.fconf[params.name].type = params.type;
+			s.fconf[params.name].defaults = s.fconf_defaults[params.type];
 		} else {
 			s.fconf[params.name] = {
 				name: params.name,
@@ -197,7 +198,7 @@ exports.interfaceType = function (params, response) {
 			};
 		}
 		var responseData = { interfaceUpdate: {
-			[params.name]: s.fconf[params.name];
+			[params.name]: s.fconf[params.name],
 		}};
 		if (typeof response === 'function') {
 			response(null, responseData);
@@ -285,8 +286,37 @@ var fconfExec = function(args, config, cb) {
 		});
 };
 
-var getExistingInterfaces() {
+var getSystemInterfaces = function () {
+	s.fconf = {};
+	var result = child_process.spawnSync(appConfig.fconfPath, ['list-interface']);
+	if (result.status) {
+		handleFailure(response, result.stderr.toString());
+		return;
+	} else {
+		JSON.parse(result.stdout.toString()).forEach(function(interface) {
+			/* {
+				Index: 3,
+				MTU: 1500,
+				Name: 'wlan0',
+				HardwareAddr: 'uCfr5z+z',
+				Flags: 19
+			} */
+			if (interface.Name !== 'lo') {
+				s.fconf[interface.Name] = {
+					enabled: false,
+					system: { properties: interface.Flags }
+				};
+			}
+		});
+		var activeInterfaces = os.networkInterfaces();
+		for (var interfaceName in activeInterfaces) {
+			if (interfaceName !== 'lo') {
+				s.fconf[interfaceName].system.addresses = activeInterfaces[interfaceName];
+			}
+		}
 
+		console.log('existingInterfaces', s.fconf);
+	}
 };
 
 var loadConfigDefaultsFromDisk = function (dir) {
@@ -306,10 +336,10 @@ var loadConfigDefaultsFromDisk = function (dir) {
 };
 
 var loadConfigFromDisk = function (dir) {
+	getSystemInterfaces();
 	if (!dir) {
 		dir = appConfig.configStateDir;
 	}
-	s.fconf = {};
 
 	loadConfigDefaultsFromDisk();
 	// files are sorted by modification time in order to determine in which mode is the wifi interface.
@@ -350,29 +380,30 @@ var loadConfigFromDisk = function (dir) {
 					state.type = "4g";
 					mode = "ndis";
 					break;
+				case "3g-ras":
+					state.type = "3g";
+					mode = "ras";
+					break;
 				case "ethernet":
-				case "3g":
 					state.type = fileName[0];
 			}
 			if (mode) {
-				var modeConfig = {
-					config: state.config,
-					command: command,
-					defaults: s.fconf_defaults[command],
-				};
-				if (!s.fconf[iface]) {
-					delete state.config;
-					s.fconf[iface] = state;
-				} else if (!s.fconf[iface].enabled) {
+				s.fconf[iface] = Object.assign(s.fconf[iface] ? s.fconf[iface] : {}, {
+					type: state.type,
+					mode: mode,
+					[mode]: {
+						config: state.config,
+						command: command,
+						defaults: s.fconf_defaults[command],
+					},
+				});
+				if (!s.fconf[iface].enabled) {
 					s.fconf[iface].enabled = state.enabled;
 				}
-				s.fconf[iface].mode = mode;
-				s.fconf[iface][mode] = modeConfig;
 			} else {
 				state.defaults = s.fconf_defaults[command];
 				state.command = command;
-				state.effective = {}; // temp
-				s.fconf[iface] = state;
+				s.fconf[iface] = Object.assign(s.fconf[iface] ? s.fconf[iface] : {}, state);
 			}
 		}
 	}
