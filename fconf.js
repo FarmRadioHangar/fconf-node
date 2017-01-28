@@ -160,6 +160,29 @@ var update4g = function (params, response) {
 
 exports.update4g = update4g;
 
+exports.configRemove = function (params, response) {
+	console.error('params:', params);
+	if (!params.name || !s.fconf[params.name]) {
+		handleFailure(response, "invalid interface name");
+		return;
+	}
+	var command = s.fconf[params.name].mode ? s.fconf[params.name][s.fconf[params.name].mode].command : s.fconf[params.name].command;
+	fconfExec([command, params.name, '--remove'], null, (error, output) => {
+		if (error) {
+			handleFailure(response, error);
+		} else {
+			var responseData = { interfaceUpdate: {
+				[params.name]: s.fconf[params.name],
+			}};
+			if (typeof response === 'function') {
+				response(null, responseData);
+			} else {
+				myLib.httpGeneric(200, responseData, response);
+			}
+		}
+	});
+};
+
 exports.interfaceUpdate = function (params, response) {
 	console.error('params:', params);
 	if (!params.name || !s.fconf[params.name]) {
@@ -189,13 +212,35 @@ exports.interfaceType = function (params, response) {
 	} else {
 		if (s.fconf[params.name]) {
 			s.fconf[params.name].type = params.type;
-			s.fconf[params.name].defaults = s.fconf_defaults[params.type];
 		} else {
 			s.fconf[params.name] = {
 				name: params.name,
 				type: params.type,
-				defaults: s.fconf_defaults[params.type],
 			};
+		}
+		switch (params.type) {
+			case "ethernet":
+				s.fconf[params.name].command = params.type;
+				s.fconf[params.name].defaults = s.fconf_defaults[params.type];
+				break;
+			case "4g":
+				s.fconf[params.name].ndis = {
+					defaults: s.fconf_defaults["4g-ndis"],
+					command: "4g-ndis"
+				};
+				break;
+			case "wifi":
+				Object.assign(s.fconf[params.name], {
+					ap: {
+						defaults: s.fconf_defaults["access-point"],
+						command: "access-point"
+					},
+					client: {
+						defaults: s.fconf_defaults["wifi-client"],
+						command: "wifi-client"
+					}
+				});
+				break;
 		}
 		var responseData = { interfaceUpdate: {
 			[params.name]: s.fconf[params.name],
@@ -258,30 +303,29 @@ var handleFailure = function (response, error) {
 var fconfExec = function(args, config, cb) {
 		console.log('fconfExec', args);
 		var fconf = child_process.spawn(appConfig.fconfPath, args);
-		var stdout = '';
-		var stderr = '';
+		var output = '';
 		if (config) {
 			fconf.stdin.write(JSON.stringify(config) + "\n");
 		}
 		fconf.on('close', (code) => {
 			if (code !== 0) {
 				console.log(`fconf process exited with code ${code}`);
-				cb(code, stderr);
+				cb(code, output);
 			} else {
 				loadConfigFromDisk();
-				cb(null, stdout);
+				cb(null, output);
 			}
 		});
 		fconf.on('error', (err) => {
 			console.log(`Failed to start child process. ${err}`);
 		});
 		fconf.stdout.on('data', (data) => {
-			stdout += data;
+			output += data;
 			console.log(`stdout: ${data}`);
 		});
 
 		fconf.stderr.on('data', (data) => {
-			stderr += data;
+			output += data;
 			console.log(`stderr: ${data}`);
 		});
 };
@@ -294,17 +338,13 @@ var getSystemInterfaces = function () {
 		return;
 	} else {
 		JSON.parse(result.stdout.toString()).forEach(function(interface) {
-			/* {
-				Index: 3,
-				MTU: 1500,
-				Name: 'wlan0',
-				HardwareAddr: 'uCfr5z+z',
-				Flags: 19
-			} */
 			if (interface.Name !== 'lo') {
 				s.fconf[interface.Name] = {
-					enabled: false,
-					system: { properties: interface.Flags }
+					type: '',
+					system: {
+						properties: interface.Flags,
+						mtu: interface.MTU,
+					}
 				};
 			}
 		});
@@ -329,7 +369,7 @@ var loadConfigDefaultsFromDisk = function (dir) {
 	for (var i in defaultsFiles) {
 		var filePath = defaultsFiles[i];
 		if (filePath.substr(-5) === '.json') {
-			var fileName = filePath.slice(0, -5); //fileName is interface type
+			var fileName = filePath.slice(0, -5); //fileName is interface type (command)
 			s.fconf_defaults[fileName] = JSON.parse(fs.readFileSync(dir + '/' + filePath, {encoding: 'utf-8'}));
 		}
 	}
@@ -360,7 +400,6 @@ var loadConfigFromDisk = function (dir) {
 		if (filePath.substr(-5) === '.json') {
 			var fileName = filePath.slice(0, -5).split('@');
 			var fileData = fs.readFileSync(dir + '/' + filePath, {encoding: 'utf-8'});
-			//s.configFiles[fileName] = fileData;
 			var state = JSON.parse(fileData);
 			// this assumes interface property will always be set in the state file.
 			//var iface = state.config.interface;
@@ -410,9 +449,4 @@ var loadConfigFromDisk = function (dir) {
 	//debug
 	//console.log(JSON.stringify(s.fconf, null, 4));
 };
-
-// startup init
-//s.fconf = {};
-//s.fconf_defaults = {};
-loadConfigFromDisk();
 
