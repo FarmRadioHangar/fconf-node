@@ -166,7 +166,8 @@ exports.configRemove = function (params, response) {
 		handleFailure(response, "invalid interface name");
 		return;
 	}
-	var command = s.fconf[params.name].mode ? s.fconf[params.name][s.fconf[params.name].mode].command : s.fconf[params.name].command;
+	var mode = params.mode ? params.mode : s.fconf[params.name].mode;
+	var command = mode ? s.fconf[params.name][mode].command : s.fconf[params.name].command;
 	fconfExec([command, params.name, '--remove'], null, (error, output) => {
 		if (error) {
 			handleFailure(response, error);
@@ -397,12 +398,11 @@ var loadConfigFromDisk = function (dir) {
 
 	for (var i in stateFiles) {
 		var filePath = stateFiles[i];
+		// fileName is in the form of "command-name@interface.json" (e.g. access-point@wlan0.json)
 		if (filePath.substr(-5) === '.json') {
 			var fileName = filePath.slice(0, -5).split('@');
 			var fileData = fs.readFileSync(dir + '/' + filePath, {encoding: 'utf-8'});
 			var state = JSON.parse(fileData);
-			// this assumes interface property will always be set in the state file.
-			//var iface = state.config.interface;
 			var iface = fileName[1];
 			var mode = null;
 			var command = fileName[0];
@@ -427,6 +427,20 @@ var loadConfigFromDisk = function (dir) {
 					state.type = fileName[0];
 			}
 			if (mode) {
+				switch (state.type) {
+					case "wifi":
+						s.fconf[iface] = Object.assign({
+							ap: {
+								defaults: s.fconf_defaults["access-point"],
+								command: "access-point"
+							},
+							client: {
+								defaults: s.fconf_defaults["wifi-client"],
+								command: "wifi-client"
+							}
+						}, s.fconf[iface]);
+						break;
+				}
 				s.fconf[iface] = Object.assign(s.fconf[iface] ? s.fconf[iface] : {}, {
 					type: state.type,
 					mode: mode,
