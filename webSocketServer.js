@@ -29,7 +29,7 @@ exports.startListener = function(options) {
 			}
 		});
 
-		// todo: load state from disk and start watching files if this is the first connected websocket client
+		// todo: start watching files if this is the first connected websocket client
 		fconf.getCurrentState(null, function(err, currentState) {
 			ws.send(JSON.stringify(currentState));
 		});

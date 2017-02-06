@@ -4,7 +4,7 @@ var myLib = require("./myLib");
 
 process.on("SIGUSR1", function () {
 	myLib.consoleLog("debug", "=========", "SIGUSR1 received", "=========");
-	s.loadConfigFromDisk(appConfig.configStateDir);
+//	fconf.loadConfigFromDisk(appConfig.configStateDir);
 	console.error("SIGUSR1 received, config was updated externaly");
 });
 

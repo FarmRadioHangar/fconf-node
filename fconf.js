@@ -35,11 +35,12 @@ var updateWiFi = function (params, response) {
 					handleFailure(response, result.stderr.toString());
 					return;
 				}
+				s.fconf[params.name].enabled = false;
 			}
 		} else {
 			args.push('--enable');
 		}
-	} else if (s.fconf[params.name] && s.fconf[params.name].enabled) {
+	} else if (params.enabled === false && s.fconf[params.name] && s.fconf[params.name].enabled) {
 		args.push('--disable');
 		// todo: handle special case when both config and disable should be applied, passing both to the binary will fail
 	}
@@ -109,6 +110,57 @@ var updateEthernet = function (params, response) {
 exports.updateEthernet = updateEthernet;
 
 var update3g = function (params, response) {
+	if (!myLib.checkObjectProperties(params, ['name', 'mode'])) {
+		handleFailure(response, "invalid input");
+		return;
+	}
+	var args = [];
+	if (params.mode === 'voice') {
+		args.unshift('voice-channel');
+	} else if (params.mode === 'ras') {
+		args.unshift('3g-ras');
+	} else {
+		handleFailure(response, "invalid input");
+		return;
+	}
+	args.push(params.name);
+
+	if (params.enabled) {
+		if (s.fconf[params.name] && s.fconf[params.name].enabled) {
+			// if changing mode, first disable existing interface
+			if (s.fconf[params.name].mode !== params.mode) {
+				args.push('--enable');
+				var args_d = [params.mode === 'ras' ? 'voice-channel' : '3g-ras', params.name, '--disable'];
+				var result = child_process.spawnSync(appConfig.fconfPath, args_d);
+				if (result.status) {
+					handleFailure(response, result.stderr.toString());
+					return;
+				}
+			}
+		} else {
+			args.push('--enable');
+		}
+	} else if (s.fconf[params.name] && s.fconf[params.name].enabled) {
+		args.push('--disable');
+		// todo: handle special case when both config and disable should be applied, passing both to the binary will fail
+	}
+
+	if (params.config) {
+		args.push('--config=stdin');
+	}
+	fconfExec(args, params.config, (error) => {
+		if (error) {
+			handleFailure(response, error);
+		} else {
+			var responseData = { interfaceUpdate: {} };
+			responseData.interfaceUpdate[params.name] = s.fconf[params.name];
+			if (typeof response === 'function') {
+				response(null, responseData);
+			} else {
+				myLib.httpGeneric(200, responseData, response);
+			}
+		}
+	});
 
 };
 
@@ -172,6 +224,11 @@ exports.configRemove = function (params, response) {
 		if (error) {
 			handleFailure(response, error);
 		} else {
+			if (mode) {
+				delete s.fconf[params.name][mode].config;
+			} else {
+				delete s.fconf[params.name].config;
+			}
 			var responseData = { interfaceUpdate: {
 				[params.name]: s.fconf[params.name],
 			}};
@@ -332,7 +389,6 @@ var fconfExec = function(args, config, cb) {
 };
 
 var getSystemInterfaces = function () {
-	s.fconf = {};
 	var result = child_process.spawnSync(appConfig.fconfPath, ['list-interface']);
 	if (result.status) {
 		handleFailure(response, result.stderr.toString());
@@ -340,13 +396,13 @@ var getSystemInterfaces = function () {
 	} else {
 		JSON.parse(result.stdout.toString()).forEach(function(interface) {
 			if (interface.Name !== 'lo') {
-				s.fconf[interface.Name] = {
+				s.fconf[interface.Name] = Object.assign({
 					type: '',
 					system: {
 						properties: interface.Flags,
 						mtu: interface.MTU,
 					}
-				};
+				}, s.fconf[interface.Name]);
 			}
 		});
 		var activeInterfaces = os.networkInterfaces();
@@ -406,6 +462,7 @@ var loadConfigFromDisk = function (dir) {
 			var iface = fileName[1];
 			var mode = null;
 			var command = fileName[0];
+			var uiLabel;
 			switch (fileName[0]) {
 				case "access-point":
 					state.type = "wifi";
@@ -422,6 +479,13 @@ var loadConfigFromDisk = function (dir) {
 				case "3g-ras":
 					state.type = "3g";
 					mode = "ras";
+					if (state.enabled) {
+						uiLabel = 'ppp0';
+					}
+					break;
+				case "voice-channel":
+					state.type = "3g";
+					mode = "voice";
 					break;
 				case "ethernet":
 					state.type = fileName[0];
@@ -440,6 +504,17 @@ var loadConfigFromDisk = function (dir) {
 							}
 						}, s.fconf[iface]);
 						break;
+					case "3g":
+						s.fconf[iface] = Object.assign({
+							voice: {
+								//defaults: s.fconf_defaults["voice-channel"],
+								command: "voice-channel"
+							},
+							ras: {
+								defaults: s.fconf_defaults["3g-ras"],
+								command: "3g-ras"
+							}
+						}, s.fconf[iface]);
 				}
 				s.fconf[iface] = Object.assign(s.fconf[iface] ? s.fconf[iface] : {}, {
 					type: state.type,
