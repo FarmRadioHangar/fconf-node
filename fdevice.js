@@ -10,9 +10,9 @@ var atiParse = function(ati) {
 
 client.on('connectFailed', function(error) {
 	//console.log('Connect Error: ' + error.toString());
-		setTimeout(function() {
-			client.connect(appConfig.fdevicesUrl);
-		}, 10000);
+	setTimeout(function() {
+		client.connect(appConfig.fdevicesUrl);
+	}, 10000);
 });
 
 client.on('connect', function(connection) {
@@ -34,56 +34,52 @@ client.on('connect', function(connection) {
 			console.log("Received from fdevices: ", incomingData);
 			//wss.broadcast(message.utf8Data);
 			if (Array.isArray(incomingData)) {
+				s.fdevices.clear();
 				var outEvent = { interfaceUpdate: {} };
-				incomingData.forEach(function(item){
-					var itemKey = item.imsi ? item.imsi : item.imei
-					s.fconf[itemKey] = Object.assign({
-						type: "3g",
-						enabled: false,
-						uiLabel: item.imsi ? null : 'No SIM',
-						system: {
-							imei: item.imei,
-							tty: item.path,
-							modem: atiParse(item.ati)
+				incomingData.forEach(function(item) {
+					let itemKey = item.imsi ? item.imsi : item.imei
+					s.fdevices.set(itemKey, {
+						imei: item.imei,
+						imsi: item.imsi,
+						tty: item.path,
+						modem: atiParse(item.ati)
+					});
+					s.updateInterfaces();
+					wss.broadcast(JSON.stringify({
+						interfaceUpdate: {
+							[itemKey]: s.interfaces[itemKey]
 						}
-					}, s.fconf[itemKey]);
-
-					outEvent.interfaceUpdate[itemKey] = s.fconf[itemKey];
+					}));
 				});
-				wss.broadcast(JSON.stringify(outEvent));
 			} else {
-				var item = incomingData.data;
+				let item = incomingData.data;
+				let itemKey = item.imsi ? item.imsi : item.imei
 				switch (incomingData.name) {
 					case "add":
 					case "update":
-						itemKey = item.imsi ? item.imsi : item.imei
-						s.fconf[itemKey] = Object.assign({
-							type: "3g",
-							enabled: false,
-							uiLabel: item.imsi ? null : 'No SIM',
-							system: {
-								imei: item.imei,
-								tty: item.path,
-								modem: atiParse(item.ati)
-							}
-						}, s.fconf[itemKey]);
-
+						s.fdevices.set(itemKey, {
+							imei: item.imei,
+							imsi: item.imsi,
+							tty: item.path,
+							modem: atiParse(item.ati)
+						});
+						s.updateInterfaces();
 						wss.broadcast(JSON.stringify({
 							interfaceUpdate: {
-								[itemKey]: s.fconf[itemKey]
+								[itemKey]: s.interfaces[itemKey]
 							}
 						}));
 						break;
 					case "remove":
-						delete s.fconf[item.imsi].system;
+						s.fdevices.delete(itemKey);
+						s.updateInterfaces();
 						wss.broadcast(JSON.stringify({
-							interfaceUpdate: {
-								[item.imsi]: s.fconf[item.imsi]
-							}
+							interfaceUpdate: { [itemKey]: s.interfaces[itemKey] ? s.interfaces[itemKey] : null }
 						}));
 						break;
 					default:
 						console.log('ivalid object received from fdevices', incomingData);
+						return;
 				}
 			}
 		}
