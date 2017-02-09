@@ -12,8 +12,8 @@ var getSystemInterfaces = function () {
 		return false;
 	} else {
 		let system = new Map();
-		var activeInterfaces = os.networkInterfaces();
-		JSON.parse(result.stdout.toString()).forEach(function(iface) {
+		let activeInterfaces = os.networkInterfaces();
+		JSON.parse(result.stdout.toString()).forEach((iface) => {
 			system.set(iface.Name, {
 				properties: iface.Flags,
 				mtu: iface.MTU,
@@ -31,14 +31,14 @@ var loadConfigFromDisk = function (dir) {
 
 	// files are sorted by modification time in order to determine in which mode is the interface.
 	// this is not a very reliable hack, some underlying structure of config files should store this information.
-	let stateFiles = fs.readdirSync(dir).map(function (fileName) {
+	let stateFiles = fs.readdirSync(dir).map((fileName) => {
 		return {
 			name: fileName,
 			time: fs.statSync(dir + '/' + fileName).mtime.getTime()
 		};
-	}).sort(function (a, b) {
+	}).sort((a, b) => {
 		return a.time - b.time;
-	}).map(function (v) {
+	}).map((v) => {
 		return v.name;
 	});
 
@@ -50,7 +50,7 @@ var loadConfigFromDisk = function (dir) {
 			let fileName = filePath.slice(0, -5).split('@');
 			let iface = fileName[1];
 			if (!iface) {
-				console.log('invalid filename', filePath);
+				console.error(`invalid filename "${filePath}" in fconf configuration folder`);
 				continue;
 			}
 			let fileData = fs.readFileSync(dir + '/' + filePath, {encoding: 'utf-8'});
@@ -185,7 +185,7 @@ module.exports = {
 					// we could be more clever and check for 'pointtopoint' flag in the NI properties
 					iface.uiLabel = 'ppp0';
 					if (system.get('ppp0')) {
-						Object.assign(iface.system, system.get('ppp0'));
+						iface.system = Object.assign(system.get('ppp0'), iface.system);
 						system.delete('ppp0');
 						iface.system.online = true;
 					} else {
