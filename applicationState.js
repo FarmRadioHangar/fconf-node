@@ -5,13 +5,66 @@ var child_process = require('child_process');
 var appConfig = require("./config.json");
 var fconf_defaults = new Map();
 
+var loadConfigDefaultsFromDisk = function (dir) {
+	if (!dir) {
+		dir = appConfig.configStateDir + '/defaults';
+	}
+
+	let defaultsFiles = fs.readdirSync(dir);
+	fconf_defaults.clear();
+
+	for (let i in defaultsFiles) {
+		let filePath = defaultsFiles[i];
+		if (filePath.substr(-5) === '.json') {
+			let fileName = filePath.slice(0, -5); //fileName is interface type (command)
+			fconf_defaults.set(fileName, JSON.parse(fs.readFileSync(dir + '/' + filePath, {encoding: 'utf-8'})));
+		}
+	}
+};
+loadConfigDefaultsFromDisk();
+
+var deviceProto = {
+	'wifi': JSON.stringify({
+		ap: {
+			defaults: fconf_defaults.get("access-point"),
+			command: "access-point"
+		},
+		client: {
+			defaults: fconf_defaults.get("wifi-client"),
+			command: "wifi-client"
+		},
+	}),
+	'3g': JSON.stringify({
+		voice: {
+			defaults: fconf_defaults.get("voice-channel"),
+			command: "voice-channel"
+		},
+		ras: {
+			defaults: fconf_defaults.get("3g-ras"),
+			command: "3g-ras"
+		},
+	}),
+	'4g': JSON.stringify({
+		ndis: {
+			defaults: fconf_defaults.get("4g-ndis"),
+			command: "4g-ndis"
+		},
+	}),
+
+	get(key) {
+		return deviceProto[key] ? JSON.parse(deviceProto[key]) : {
+			defaults: fconf_defaults.get(key),
+			command: key,
+		};
+	},
+};
+
 var getSystemInterfaces = function () {
 	let result = child_process.spawnSync(appConfig.fconfPath, ['list-interface']);
+	let system = new Map();
 	if (result.status) {
-		handleFailure(response, result.stderr.toString());
-		return false;
+		console.error('Error getting interfaces from system', result.stderr.toString());
 	} else {
-		let system = new Map();
 		let activeInterfaces = os.networkInterfaces();
 		JSON.parse(result.stdout.toString()).forEach((iface) => {
 			system.set(iface.Name, {
@@ -20,8 +73,8 @@ var getSystemInterfaces = function () {
 				addresses: activeInterfaces[iface.Name],
 			});
 		});
-		return system;
 	}
+	return system;
 };
 
 var loadConfigFromDisk = function (dir) {
@@ -83,31 +136,8 @@ var loadConfigFromDisk = function (dir) {
 			}
 
 			if (mode) {
-				switch (state.type) {
-					case "wifi":
-						fconf.set(iface, Object.assign({
-							ap: {
-								defaults: fconf_defaults.get("access-point"),
-								command: "access-point"
-							},
-							client: {
-								defaults: fconf_defaults.get("wifi-client"),
-								command: "wifi-client"
-							}
-						}, fconf.get(iface)));
-						break;
-					case "3g":
-						fconf.set(iface, Object.assign({
-							voice: {
-								//defaults: fconf_defaults.get("voice-channel"),
-								command: "voice-channel"
-							},
-							ras: {
-								defaults: fconf_defaults.get("3g-ras"),
-								command: "3g-ras"
-							}
-						}, fconf.get(iface)));
-				}
+				// todo: fix this mess
+				fconf.set(iface, Object.assign(deviceProto.get(state.type), fconf.get(iface)));
 				fconf.set(iface, Object.assign(fconf.get(iface) ? fconf.get(iface) : {}, {
 					type: state.type,
 					mode: mode,
@@ -134,26 +164,11 @@ var loadConfigFromDisk = function (dir) {
 	//console.log(JSON.stringify(fconf, null, 4));
 };
 
-var loadConfigDefaultsFromDisk = function (dir) {
-	if (!dir) {
-		dir = appConfig.configStateDir + '/defaults';
-	}
-
-	var defaultsFiles = fs.readdirSync(dir);
-
-	for (var i in defaultsFiles) {
-		var filePath = defaultsFiles[i];
-		if (filePath.substr(-5) === '.json') {
-			var fileName = filePath.slice(0, -5); //fileName is interface type (command)
-			fconf_defaults.set(fileName, JSON.parse(fs.readFileSync(dir + '/' + filePath, {encoding: 'utf-8'})));
-		}
-	}
-};
-loadConfigDefaultsFromDisk();
 
 module.exports = {
 	fdevices: new Map(),
 	interfaces: {}, //this is object instead of Map because we want to export it as JSON
+	getDeviceProto: deviceProto.get,
 
 	updateInterfaces() {
 		this.interfaces = {
@@ -165,14 +180,14 @@ module.exports = {
 		let system = getSystemInterfaces();
 		let fconf = loadConfigFromDisk();
 
-		fconf.forEach(function(value, key) {
+		fconf.forEach((value, key) => {
 			console.log('fconf', key, JSON.stringify(value, null, 4));
 			if (system.has(key)) {
 				this.interfaces.set(key, Object.assign({ system: system.get(key) }, value));
 				system.delete(key);
 				fconf.delete(key);
 			}
-		}.bind(this));
+		});
 
 		this.fdevices.forEach((value, key) => {
 			console.log('fdevices', key, value);
@@ -199,17 +214,7 @@ module.exports = {
 					system: value,
 				};
 				if (value.imsi) {
-					let simPrototype = {
-						voice: {
-							//defaults: this..fconf_defaults.get("voice-channel"),
-							command: "voice-channel"
-						},
-						ras: {
-							defaults: fconf_defaults.get("3g-ras"),
-							command: "3g-ras"
-						}
-					};
-					iface = Object.assign(simPrototype, iface);
+					iface = Object.assign(this.getDeviceProto('3g'), iface);
 				} else {
 					iface.uiLabel = 'No SIM';
 				}
@@ -234,10 +239,9 @@ module.exports = {
 			}
 		});
 
-		//this.interfaces.forEach(function(value, key) {
-			console.log('======================================');
-			console.log('interfaces', JSON.stringify(this.interfaces, null, 4));
-		//});
+		//debug
+		console.log('======================================');
+		console.log('interfaces', JSON.stringify(this.interfaces, null, 4));
 	},
 };
 

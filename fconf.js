@@ -11,7 +11,7 @@ var updateWiFi = function (params, response) {
 		handleFailure(response, "invalid input");
 		return;
 	}
-	var args = [];
+	let args = [];
 	if (params.mode === 'client') {
 		args.unshift('wifi-client');
 	} else if (params.mode === 'ap') {
@@ -27,8 +27,8 @@ var updateWiFi = function (params, response) {
 			// if changing mode, first disable existing interface
 			if (s.interfaces[params.name].mode !== params.mode) {
 				args.push('--enable');
-				var args_d = [params.mode === 'ap' ? 'wifi-client' : 'access-point', params.name, '--disable'];
-				var result = child_process.spawnSync(appConfig.fconfPath, args_d);
+				let args_d = [params.mode === 'ap' ? 'wifi-client' : 'access-point', params.name, '--disable'];
+				let result = child_process.spawnSync(appConfig.fconfPath, args_d);
 				if (result.status) {
 					handleFailure(response, result.stderr.toString());
 					return;
@@ -50,8 +50,9 @@ var updateWiFi = function (params, response) {
 		if (error) {
 			handleFailure(response, error);
 		} else {
-			var responseData = { interfaceUpdate: {} };
-			responseData.interfaceUpdate[params.name] = s.interfaces[params.name];
+			let responseData = { interfaceUpdate: {
+				[params.name]: s.interfaces[params.name],
+			}};
 			if (typeof response === 'function') {
 				response(null, responseData);
 			} else {
@@ -69,7 +70,7 @@ var updateEthernet = function (params, response) {
 		handleFailure(response, "invalid input");
 		return;
 	}
-	var args = ['ethernet', params.name];
+	let args = ['ethernet', params.name];
 
 	if (params.enabled === false) {
 		if (s.interfaces[params.name] && s.interfaces[params.name].enabled) {
@@ -94,8 +95,9 @@ var updateEthernet = function (params, response) {
 		if (error) {
 			handleFailure(response, error);
 		} else {
-			var responseData = { interfaceUpdate: {} };
-			responseData.interfaceUpdate[params.name] = s.interfaces[params.name];
+			let responseData = { interfaceUpdate: {
+				[params.name]: s.interfaces[params.name],
+			}};
 			if (typeof response === 'function') {
 				response(null, responseData);
 			} else {
@@ -112,7 +114,7 @@ var update3g = function (params, response) {
 		handleFailure(response, "invalid input");
 		return;
 	}
-	var args = [];
+	let args = [];
 	if (params.mode === 'voice') {
 		args.unshift('voice-channel');
 	} else if (params.mode === 'ras') {
@@ -128,8 +130,8 @@ var update3g = function (params, response) {
 			// if changing mode, first disable existing interface
 			if (s.interfaces[params.name].mode !== params.mode) {
 				args.push('--enable');
-				var args_d = [params.mode === 'ras' ? 'voice-channel' : '3g-ras', params.name, '--disable'];
-				var result = child_process.spawnSync(appConfig.fconfPath, args_d);
+				let args_d = [params.mode === 'ras' ? 'voice-channel' : '3g-ras', params.name, '--disable'];
+				let result = child_process.spawnSync(appConfig.fconfPath, args_d);
 				if (result.status) {
 					handleFailure(response, result.stderr.toString());
 					return;
@@ -153,8 +155,9 @@ var update3g = function (params, response) {
 		if (error) {
 			handleFailure(response, error);
 		} else {
-			var responseData = { interfaceUpdate: {} };
-			responseData.interfaceUpdate[params.name] = s.interfaces[params.name];
+			let responseData = { interfaceUpdate: {
+				[params.name]: s.interfaces[params.name],
+			}};
 			if (typeof response === 'function') {
 				response(null, responseData);
 			} else {
@@ -162,7 +165,6 @@ var update3g = function (params, response) {
 			}
 		}
 	});
-
 };
 
 exports.update3g = update3g;
@@ -174,7 +176,7 @@ var update4g = function (params, response) {
 		handleFailure(response, "invalid input");
 		return;
 	}
-	var args = [];
+	let args = [];
 	if (params.mode === 'ndis') {
 		args.unshift('4g-ndis');
 	} else {
@@ -199,8 +201,9 @@ var update4g = function (params, response) {
 		if (error) {
 			handleFailure(response, error);
 		} else {
-			var responseData = { interfaceUpdate: {} };
-			responseData.interfaceUpdate[params.name] = s.interfaces[params.name];
+			let responseData = { interfaceUpdate: {
+				[params.name]: s.interfaces[params.name],
+			}};
 			if (typeof response === 'function') {
 				response(null, responseData);
 			} else {
@@ -208,7 +211,6 @@ var update4g = function (params, response) {
 			}
 		}
 	});
-
 };
 
 exports.update4g = update4g;
@@ -219,18 +221,13 @@ exports.configRemove = function (params, response) {
 		handleFailure(response, "invalid interface name");
 		return;
 	}
-	var mode = params.mode ? params.mode : s.interfaces[params.name].mode;
-	var command = mode ? s.interfaces[params.name][mode].command : s.interfaces[params.name].command;
+	let mode = params.mode ? params.mode : s.interfaces[params.name].mode;
+	let command = mode ? s.interfaces[params.name][mode].command : s.interfaces[params.name].command;
 	fconfExec([command, params.name, '--remove'], null, (error, output) => {
 		if (error) {
 			handleFailure(response, error);
 		} else {
-			if (mode) {
-				delete s.interfaces[params.name][mode].config;
-			} else {
-				delete s.interfaces[params.name].config;
-			}
-			var responseData = { interfaceUpdate: {
+			let responseData = { interfaceUpdate: {
 				[params.name]: s.interfaces[params.name],
 			}};
 			if (typeof response === 'function') {
@@ -261,6 +258,8 @@ exports.interfaceUpdate = function (params, response) {
 		case "4g":
 			update4g(params, response);
 			break;
+		default:
+			handleFailure(response, "invalid interface type");
 	}
 };
 
@@ -277,31 +276,9 @@ exports.interfaceType = function (params, response) {
 				type: params.type,
 			};
 		}
-		switch (params.type) {
-			case "ethernet":
-				s.interfaces[params.name].command = params.type;
-				s.interfaces[params.name].defaults = s.interfaces_defaults.get(params.type);
-				break;
-			case "4g":
-				s.interfaces[params.name].ndis = {
-					defaults: s.interfaces_defaults.get("4g-ndis"),
-					command: "4g-ndis"
-				};
-				break;
-			case "wifi":
-				Object.assign(s.interfaces[params.name], {
-					ap: {
-						defaults: s.interfaces_defaults.get("access-point"),
-						command: "access-point"
-					},
-					client: {
-						defaults: s.interfaces_defaults.get("wifi-client"),
-						command: "wifi-client"
-					}
-				});
-				break;
-		}
-		var responseData = { interfaceUpdate: {
+		Object.assign(s.interfaces[params.name], s.getDeviceProto(params.type));
+
+		let responseData = { interfaceUpdate: {
 			[params.name]: s.interfaces[params.name],
 		}};
 		if (typeof response === 'function') {
@@ -322,13 +299,13 @@ exports.interfaceEnable = function (params, response) {
 		if (s.interfaces[params.name].enabled === params.enabled) {
 			myLib.consoleLog('warning', 'fconf.interfaceEnable', 'Value already set', params);
 		}
-		var command = s.interfaces[params.name].mode ? s.interfaces[params.name][s.interfaces[params.name].mode].command : s.interfaces[params.name].command;
-		var args = [command, params.name, params.enabled ? '--enable' : '--disable'];
+		let command = s.interfaces[params.name].mode ? s.interfaces[params.name][s.interfaces[params.name].mode].command : s.interfaces[params.name].command;
+		let args = [command, params.name, params.enabled ? '--enable' : '--disable'];
 		fconfExec(args, null, (error) => {
 			if (error) {
 				handleFailure(response, error);
 			} else {
-				var responseData = { interfaceEnable: {
+				let responseData = { interfaceEnable: {
 					[params.name]: params.enabled
 				}};
 				if (typeof response === 'function') {
@@ -360,15 +337,15 @@ var handleFailure = function (response, error) {
 };
 
 var fconfExec = function(args, config, cb) {
-		console.log('fconfExec', args);
-		var fconf = child_process.spawn(appConfig.fconfPath, args);
-		var output = '';
+		console.log('fconfExec', args, config);
+		let fconf = child_process.spawn(appConfig.fconfPath, args);
+		let output = '';
 		if (config) {
 			fconf.stdin.write(JSON.stringify(config) + "\n");
 		}
 		fconf.on('close', (code) => {
 			if (code !== 0) {
-				console.log(`fconf process exited with code ${code}`);
+				console.error(`fconf process exited with code ${code}`);
 				cb(code, output);
 			} else {
 				s.updateInterfaces();
@@ -376,15 +353,15 @@ var fconfExec = function(args, config, cb) {
 			}
 		});
 		fconf.on('error', (err) => {
-			console.log(`Failed to start child process. ${err}`);
+			console.error(`Failed to start child process. ${err}`);
 		});
 		fconf.stdout.on('data', (data) => {
 			output += data;
-			console.log(`stdout: ${data}`);
+			console.log(`stdout: ${data}`); //debug
 		});
 
 		fconf.stderr.on('data', (data) => {
 			output += data;
-			console.log(`stderr: ${data}`);
+			console.log(`stderr: ${data}`); //debug
 		});
 };
