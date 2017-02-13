@@ -1,0 +1,16 @@
+[Unit]
+Description=backend for fconf polymer configuration interface
+After=run-user-0.mount
+
+[Service]
+ExecStart=/usr/local/bin/node --use-strict /home/fri/fconf-node/index.js
+Restart=always
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=fconf-node
+User=fri
+Group=fri
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target
