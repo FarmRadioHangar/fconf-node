@@ -6,7 +6,6 @@ var myLib = require("./myLib");
 // the response parameter of the exported functions can be httpResponse object or callback function
 
 var updateWiFi = function (params, response) {
-	console.error('params:', params);
 	if (!myLib.checkObjectProperties(params, ['name', 'mode'])) {
 		handleFailure(response, "invalid input");
 		return;
@@ -22,23 +21,19 @@ var updateWiFi = function (params, response) {
 	}
 	args.push(params.name);
 
+	let iface = s.interfaces[params.name];
 	if (params.enabled) {
-		if (s.interfaces[params.name] && s.interfaces[params.name].enabled) {
-			// if changing mode, first disable existing interface
-			if (s.interfaces[params.name].mode !== params.mode) {
-				args.push('--enable');
-				let args_d = [params.mode === 'ap' ? 'wifi-client' : 'access-point', params.name, '--disable'];
-				let result = child_process.spawnSync(appConfig.fconfPath, args_d);
-				if (result.status) {
-					handleFailure(response, result.stderr.toString());
-					return;
-				}
-				s.interfaces[params.name].enabled = false;
+		// if changing mode, first disable existing interface
+		if (iface && iface.enabled && iface.mode !== params.mode) {
+			let args_d = [params.mode === 'ap' ? 'wifi-client' : 'access-point', params.name, '--disable'];
+			let result = child_process.spawnSync(appConfig.fconfPath, args_d);
+			if (result.status) {
+				handleFailure(response, result.stderr.toString());
+				return;
 			}
-		} else {
-			args.push('--enable');
 		}
-	} else if (params.enabled === false && s.interfaces[params.name] && s.interfaces[params.name].enabled) {
+		args.push('--enable');
+	} else if (params.enabled === false && iface && iface.enabled) {
 		args.push('--disable');
 		// todo: handle special case when both config and disable should be applied, passing both to the binary will fail
 	}
@@ -65,7 +60,6 @@ var updateWiFi = function (params, response) {
 exports.updateWiFi = updateWiFi;
 
 var updateEthernet = function (params, response) {
-	console.error('params:', params);
 	if (!myLib.checkObjectProperties(params, ['name'])) {
 		handleFailure(response, "invalid input");
 		return;
@@ -79,13 +73,6 @@ var updateEthernet = function (params, response) {
 		// todo: handle special case when both config and disable should be applied, passing both to the binary will fail
 	} else if (params.enabled === true) {
 		args.push('--enable');
-		/*
-		if (s.interfaces[params.name] && s.interfaces[params.name].enabled) {
-			args.push('--reload');
-		} else {
-			args.push('--enable');
-		}
-		*/
 	}
 
 	if (params.config) {
@@ -125,22 +112,19 @@ var update3g = function (params, response) {
 	}
 	args.push(params.name);
 
-	if (params.enabled) {
-		if (s.interfaces[params.name] && s.interfaces[params.name].enabled) {
-			// if changing mode, first disable existing interface
-			if (s.interfaces[params.name].mode !== params.mode) {
-				args.push('--enable');
-				let args_d = [params.mode === 'ras' ? 'voice-channel' : '3g-ras', params.name, '--disable'];
-				let result = child_process.spawnSync(appConfig.fconfPath, args_d);
-				if (result.status) {
-					handleFailure(response, result.stderr.toString());
-					return;
-				}
+	let iface = s.interfaces[params.name];
+	if (params.enabled === true) {
+		// if changing mode, first disable existing interface
+		if (iface && iface.enabled && iface.mode !== params.mode) {
+			let args_d = [params.mode === 'ras' ? 'voice-channel' : '3g-ras', params.name, '--disable'];
+			let result = child_process.spawnSync(appConfig.fconfPath, args_d);
+			if (result.status) {
+				handleFailure(response, result.stderr.toString());
+				return;
 			}
-		} else {
-			args.push('--enable');
 		}
-	} else if (s.interfaces[params.name] && s.interfaces[params.name].enabled) {
+		args.push('--enable');
+	} else if (params.enabled === false && iface && iface.enabled) {
 		args.push('--disable');
 		// todo: handle special case when both config and disable should be applied, passing both to the binary will fail
 	}
@@ -170,8 +154,7 @@ var update3g = function (params, response) {
 exports.update3g = update3g;
 
 var update4g = function (params, response) {
-	console.error('update4g', 'params:', params);
-	params.mode = 'ndis'; //temp
+	//params.mode = 'ndis'; //temp
 	if (!myLib.checkObjectProperties(params, ['name', 'mode'])) {
 		handleFailure(response, "invalid input");
 		return;
@@ -268,15 +251,12 @@ exports.interfaceType = function (params, response) {
 	if (!myLib.checkObjectProperties(params, ['name', 'type'])) {
 		handleFailure(response, "invalid input");
 	} else {
-		if (s.interfaces[params.name]) {
-			s.interfaces[params.name].type = params.type;
-		} else {
+		if (!s.interfaces[params.name]) {
 			s.interfaces[params.name] = {
 				name: params.name,
-				type: params.type,
 			};
 		}
-		Object.assign(s.interfaces[params.name], s.getDeviceProto(params.type));
+		s.interfaces[params.name] = Object.assign(s.getDeviceProto(params.type), s.interfaces[params.name], { type: params.type });
 
 		let responseData = { interfaceUpdate: {
 			[params.name]: s.interfaces[params.name],
@@ -296,10 +276,11 @@ exports.interfaceEnable = function (params, response) {
 	} else if (!s.interfaces[params.name]) {
 		handleFailure(response, "interface not found");
 	} else {
-		if (s.interfaces[params.name].enabled === params.enabled) {
+		let iface = s.interfaces[params.name];
+		if (iface.enabled === params.enabled) {
 			myLib.consoleLog('warning', 'fconf.interfaceEnable', 'Value already set', params);
 		}
-		let command = s.interfaces[params.name].mode ? s.interfaces[params.name][s.interfaces[params.name].mode].command : s.interfaces[params.name].command;
+		let command = iface.mode ? iface[iface.mode].command : iface.command;
 		let args = [command, params.name, params.enabled ? '--enable' : '--disable'];
 		fconfExec(args, null, (error) => {
 			if (error) {
