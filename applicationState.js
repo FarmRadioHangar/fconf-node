@@ -26,36 +26,43 @@ loadConfigDefaultsFromDisk();
 var deviceProto = {
 	'wifi': JSON.stringify({
 		ap: {
+			config: false,
 			defaults: fconf_defaults.get("access-point"),
 			command: "access-point"
 		},
 		client: {
+			config: false,
 			defaults: fconf_defaults.get("wifi-client"),
 			command: "wifi-client"
 		},
 	}),
 	'3g': JSON.stringify({
 		voice: {
+			config: false,
 			defaults: fconf_defaults.get("voice-channel"),
 			command: "voice-channel"
 		},
 		ras: {
+			config: false,
 			defaults: fconf_defaults.get("3g-ras"),
 			command: "3g-ras"
 		},
 	}),
 	'4g': JSON.stringify({
 		ndis: {
+			config: false,
 			defaults: fconf_defaults.get("4g-ndis"),
 			command: "4g-ndis"
 		},
 	}),
 
 	get(key) {
-		return deviceProto[key] ? JSON.parse(deviceProto[key]) : {
+		let proto = deviceProto[key] ? JSON.parse(deviceProto[key]) : {
+			config: false,
 			defaults: fconf_defaults.get(key),
 			command: key,
 		};
+		return Object.assign(proto, { enabled: false });
 	},
 };
 
@@ -82,7 +89,7 @@ var loadConfigFromDisk = function (dir) {
 		dir = appConfig.configStateDir;
 	}
 
-	// files are sorted by modification time in order to determine in which mode is the interface.
+	// files are sorted by modification time in order to determine in which mode is the interface when disabled.
 	// this is not a very reliable hack, some underlying structure of config files should store this information.
 	let stateFiles = fs.readdirSync(dir).map((fileName) => {
 		return {
@@ -130,6 +137,11 @@ var loadConfigFromDisk = function (dir) {
 				case "voice-channel":
 					state.type = "3g";
 					mode = "voice";
+					if (state.enabled) {
+						if (state.config && state.config.number) { // these must exist
+							state.uiLabel = state.config.number;
+						}
+					}
 					break;
 				case "ethernet":
 					state.type = fileName[0];
@@ -181,7 +193,7 @@ module.exports = {
 		let fconf = loadConfigFromDisk();
 
 		fconf.forEach((value, key) => {
-			console.log('fconf', key, JSON.stringify(value, null, 4));
+			//console.log('fconf', key, JSON.stringify(value, null, 4));
 			if (system.has(key)) {
 				this.interfaces.set(key, Object.assign({ system: system.get(key) }, value));
 				system.delete(key);
@@ -190,7 +202,7 @@ module.exports = {
 		});
 
 		this.fdevices.forEach((value, key) => {
-			console.log('fdevices', key, value);
+			//console.log('fdevices', key, value);
 			let iface;
 			if (fconf.has(key)) {
 				iface = Object.assign({ system: value }, fconf.get(key));
@@ -229,19 +241,18 @@ module.exports = {
 
 		//existing but unconfigured
 		system.forEach((value, key) => {
-			console.log('system', key, value);
+			//console.log('system', key, value);
 			if (key !== 'lo') {
 				this.interfaces.set(key, {
 					type: '',
-					config: false,
 					system: value,
 				});
 			}
 		});
 
 		//debug
-		console.log('======================================');
-		console.log('interfaces', JSON.stringify(this.interfaces, null, 4));
+		//console.log('======================================');
+		//console.log('interfaces', JSON.stringify(this.interfaces, null, 4));
 	},
 };
 
