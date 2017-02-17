@@ -7,7 +7,11 @@ var s = require('./applicationState');
 var atiParse = function(ati) {
 	// parse response from modem ATI command
 	// remove command echo and result, leaving only response
-	return ati.split("\r\r\n")[1].split("\r\n\r\n")[0];
+	let modemInfo = ati.split("\r\n\r\n")[0];
+	if (modemInfo.substring(0,3) === 'ATI') {
+		return modemInfo.split("\r\r\n")[1];
+	}
+	return modemInfo;
 };
 
 var dongleUpdate = function (item) {
