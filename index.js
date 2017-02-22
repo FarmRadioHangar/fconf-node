@@ -20,20 +20,3 @@ var websocket = require('./webSocketServer');
 
 exports.wsBroadcast = websocket.startListener({ port: appConfig.webSocketPort });
 
-/*
-// rest server
-var http = require("http");
-var webHandlers = {
-	fconf: fconf
-};
-var router = require("./router");
-
-function startRest(route, webHandlers) {
-	function onApiRequest(request, response) {
-		route(webHandlers, request, response, true);
-	}
-	http.createServer(onApiRequest).listen(appConfig.restPort).setTimeout(55000);
-}
-
-startRest(router.route, webHandlers);
-*/

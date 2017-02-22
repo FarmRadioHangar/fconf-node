@@ -3,11 +3,9 @@ var appConfig = require("./config.json");
 var s = require("./applicationState");
 var myLib = require("./myLib");
 
-// the response parameter of the exported functions can be httpResponse object or callback function
-
 var updateWiFi = function (params, response) {
 	if (!myLib.checkObjectProperties(params, ['name', 'mode'])) {
-		handleFailure(response, "invalid input");
+		response("invalid input");
 		return;
 	}
 	let args = [];
@@ -16,7 +14,7 @@ var updateWiFi = function (params, response) {
 	} else if (params.mode === 'ap') {
 		args.unshift('access-point');
 	} else {
-		handleFailure(response, "invalid input");
+		response("invalid input");
 		return;
 	}
 	args.push(params.name);
@@ -28,8 +26,13 @@ var updateWiFi = function (params, response) {
 			let args_d = [params.mode === 'ap' ? 'wifi-client' : 'access-point', params.name, '--disable'];
 			let result = child_process.spawnSync(appConfig.fconfPath, args_d);
 			if (result.status) {
-				handleFailure(response, result.stderr.toString());
+				response(result.stderr.toString());
 				return;
+			} else {
+				iface.enabled = false;
+				response(null, { interfaceEnable: {
+					[params.name]: false
+				}});
 			}
 		}
 		args.push('--enable');
@@ -43,25 +46,26 @@ var updateWiFi = function (params, response) {
 	}
 	fconfExec(args, params.config, (error) => {
 		if (error) {
-			handleFailure(response, error);
+			response(error);
 		} else {
-			let responseData = { interfaceUpdate: {
+			response(null, { interfaceUpdate: {
 				[params.name]: s.interfaces[params.name],
-			}};
-			if (typeof response === 'function') {
-				response(null, responseData);
-			} else {
-				myLib.httpGeneric(200, responseData, response);
-			}
+			}});
+			setTimeout((response) => {
+				s.updateInterfaces();
+				response(null, { interfaceUpdate: {
+					[params.name]: s.interfaces[params.name],
+				}});
+			}, 3333, response);
 		}
 	});
 };
 
-exports.updateWiFi = updateWiFi;
+//exports.updateWiFi = updateWiFi;
 
 var updateEthernet = function (params, response) {
 	if (!myLib.checkObjectProperties(params, ['name'])) {
-		handleFailure(response, "invalid input");
+		response("invalid input");
 		return;
 	}
 	let args = ['ethernet', params.name];
@@ -80,25 +84,26 @@ var updateEthernet = function (params, response) {
 	}
 	fconfExec(args, params.config, (error) => {
 		if (error) {
-			handleFailure(response, error);
+			response(error);
 		} else {
-			let responseData = { interfaceUpdate: {
+			response(null, { interfaceUpdate: {
 				[params.name]: s.interfaces[params.name],
-			}};
-			if (typeof response === 'function') {
-				response(null, responseData);
-			} else {
-				myLib.httpGeneric(200, responseData, response);
-			}
+			}});
+			setTimeout((response) => {
+				s.updateInterfaces();
+				response(null, { interfaceUpdate: {
+					[params.name]: s.interfaces[params.name],
+				}});
+			}, 3333, response);
 		}
 	});
 };
 
-exports.updateEthernet = updateEthernet;
+//exports.updateEthernet = updateEthernet;
 
 var update3g = function (params, response) {
 	if (!myLib.checkObjectProperties(params, ['name', 'mode'])) {
-		handleFailure(response, "invalid input");
+		response("invalid input");
 		return;
 	}
 	let args = [];
@@ -107,7 +112,7 @@ var update3g = function (params, response) {
 	} else if (params.mode === 'ras') {
 		args.unshift('3g-ras');
 	} else {
-		handleFailure(response, "invalid input");
+		response("invalid input");
 		return;
 	}
 	args.push(params.name);
@@ -119,8 +124,13 @@ var update3g = function (params, response) {
 			let args_d = [params.mode === 'ras' ? 'voice-channel' : '3g-ras', params.name, '--disable'];
 			let result = child_process.spawnSync(appConfig.fconfPath, args_d);
 			if (result.status) {
-				handleFailure(response, result.stderr.toString());
+				response(result.stderr.toString());
 				return;
+			} else {
+				iface.enabled = false;
+				response(null, { interfaceEnable: {
+					[params.name]: false
+				}});
 			}
 		}
 		args.push('--enable');
@@ -137,33 +147,34 @@ var update3g = function (params, response) {
 	}
 	fconfExec(args, params.config, (error) => {
 		if (error) {
-			handleFailure(response, error);
+			response(error);
 		} else {
-			let responseData = { interfaceUpdate: {
+			response(null, { interfaceUpdate: {
 				[params.name]: s.interfaces[params.name],
-			}};
-			if (typeof response === 'function') {
-				response(null, responseData);
-			} else {
-				myLib.httpGeneric(200, responseData, response);
-			}
+			}});
+			setTimeout((response) => {
+				s.updateInterfaces();
+				response(null, { interfaceUpdate: {
+					[params.name]: s.interfaces[params.name],
+				}});
+			}, 3333, response);
 		}
 	});
 };
 
-exports.update3g = update3g;
+//exports.update3g = update3g;
 
 var update4g = function (params, response) {
 	//params.mode = 'ndis'; //temp
 	if (!myLib.checkObjectProperties(params, ['name', 'mode'])) {
-		handleFailure(response, "invalid input");
+		response("invalid input");
 		return;
 	}
 	let args = [];
 	if (params.mode === 'ndis') {
 		args.unshift('4g-ndis');
 	} else {
-		handleFailure(response, "invalid input, unknown mode");
+		response("invalid input: unknown mode");
 		return;
 	}
 	args.push(params.name);
@@ -182,42 +193,38 @@ var update4g = function (params, response) {
 	}
 	fconfExec(args, params.config, (error) => {
 		if (error) {
-			handleFailure(response, error);
+			response(error);
 		} else {
-			let responseData = { interfaceUpdate: {
+			response(null, { interfaceUpdate: {
 				[params.name]: s.interfaces[params.name],
-			}};
-			if (typeof response === 'function') {
-				response(null, responseData);
-			} else {
-				myLib.httpGeneric(200, responseData, response);
-			}
+			}});
+			setTimeout((response) => {
+				s.updateInterfaces();
+				response(null, { interfaceUpdate: {
+					[params.name]: s.interfaces[params.name],
+				}});
+			}, 3333, response);
 		}
 	});
 };
 
-exports.update4g = update4g;
+//exports.update4g = update4g;
 
 exports.configRemove = function (params, response) {
 	console.error('params:', params);
 	if (!params.name || !s.interfaces[params.name]) {
-		handleFailure(response, "invalid interface name");
+		response("invalid interface name");
 		return;
 	}
 	let mode = params.mode ? params.mode : s.interfaces[params.name].mode;
 	let command = mode ? s.interfaces[params.name][mode].command : s.interfaces[params.name].command;
 	fconfExec([command, params.name, '--remove'], null, (error, output) => {
 		if (error) {
-			handleFailure(response, error);
+			response(error);
 		} else {
-			let responseData = { interfaceUpdate: {
+			response(null, { interfaceUpdate: {
 				[params.name]: s.interfaces[params.name],
-			}};
-			if (typeof response === 'function') {
-				response(null, responseData);
-			} else {
-				myLib.httpGeneric(200, responseData, response);
-			}
+			}});
 		}
 	});
 };
@@ -225,7 +232,7 @@ exports.configRemove = function (params, response) {
 exports.interfaceUpdate = function (params, response) {
 	console.error('params:', params);
 	if (!params.name || !s.interfaces[params.name]) {
-		handleFailure(response, "invalid interface name");
+		response("invalid interface name");
 		return;
 	}
 	switch (s.interfaces[params.name].type) {
@@ -242,14 +249,14 @@ exports.interfaceUpdate = function (params, response) {
 			update4g(params, response);
 			break;
 		default:
-			handleFailure(response, "invalid interface type");
+			response("invalid interface type");
 	}
 };
 
 exports.interfaceType = function (params, response) {
 	console.error('params:', params);
 	if (!myLib.checkObjectProperties(params, ['name', 'type'])) {
-		handleFailure(response, "invalid input");
+		response("invalid input");
 	} else {
 		if (!s.interfaces[params.name]) {
 			s.interfaces[params.name] = {
@@ -258,23 +265,18 @@ exports.interfaceType = function (params, response) {
 		}
 		s.interfaces[params.name] = Object.assign(s.getDeviceProto(params.type), s.interfaces[params.name], { type: params.type });
 
-		let responseData = { interfaceUpdate: {
+		response(null, { interfaceUpdate: {
 			[params.name]: s.interfaces[params.name],
-		}};
-		if (typeof response === 'function') {
-			response(null, responseData);
-		} else {
-			myLib.httpGeneric(200, responseData, response);
-		}
+		}});
 	}
 };
 
 exports.interfaceEnable = function (params, response) {
 	console.error('params:', params);
 	if (!myLib.checkObjectProperties(params, ['name', 'enabled'])) {
-		handleFailure(response, "invalid input");
+		response("invalid input");
 	} else if (!s.interfaces[params.name]) {
-		handleFailure(response, "interface not found");
+		response("interface not found");
 	} else {
 		let iface = s.interfaces[params.name];
 		if (iface.enabled === params.enabled) {
@@ -284,16 +286,17 @@ exports.interfaceEnable = function (params, response) {
 		let args = [command, params.name, params.enabled ? '--enable' : '--disable'];
 		fconfExec(args, null, (error) => {
 			if (error) {
-				handleFailure(response, error);
+				response(error);
 			} else {
-				let responseData = { interfaceEnable: {
+				response(null, { interfaceEnable: {
 					[params.name]: params.enabled
-				}};
-				if (typeof response === 'function') {
-					response(null, responseData);
-				} else {
-					myLib.httpGeneric(200, responseData, response);
-				}
+				}});
+				setTimeout((response) => {
+					s.updateInterfaces();
+					response(null, { interfaceUpdate: {
+						[params.name]: s.interfaces[params.name],
+					}});
+				}, 3333, response);
 			}
 		});
 	}
@@ -301,20 +304,7 @@ exports.interfaceEnable = function (params, response) {
 
 exports.getCurrentState = function (params, response) {
 	s.updateInterfaces();
-	if (typeof response === 'function') {
-		response(null, { interfaceInit: s.interfaces });
-	} else {
-		myLib.httpGeneric(200, JSON.stringify(s.interfaces), response, "DEBUG::getCurrentState");
-	}
-};
-
-var handleFailure = function (response, error) {
-	console.log('handleFailure', error);
-	if (typeof response === 'function') {
-		response(error);
-	} else {
-		myLib.httpGeneric(512, error, response);
-	}
+	response(null, { interfaceInit: s.interfaces });
 };
 
 var fconfExec = function(args, config, cb) {
