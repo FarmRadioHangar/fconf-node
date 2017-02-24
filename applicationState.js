@@ -14,10 +14,10 @@ var loadConfigDefaultsFromDisk = function (dir) {
 	fconf_defaults.clear();
 
 	for (let i in defaultsFiles) {
-		let filePath = defaultsFiles[i];
-		if (filePath.substr(-5) === '.json') {
-			let fileName = filePath.slice(0, -5); //fileName is interface type (command)
-			fconf_defaults.set(fileName, JSON.parse(fs.readFileSync(dir + '/' + filePath, {encoding: 'utf-8'})));
+		let fileName = defaultsFiles[i];
+		if (fileName.substr(-5) === '.json') {
+			let interfaceType = fileName.slice(0, -5); //filename is the corresponding fconf command
+			fconf_defaults.set(interfaceType, JSON.parse(fs.readFileSync(dir + '/' + fileName, {encoding: 'utf-8'})));
 		}
 	}
 };
@@ -69,6 +69,7 @@ var deviceProto = {
 var getSystemInterfaces = function () {
 	let result = child_process.spawnSync(appConfig.fconfPath, ['list-interface']);
 	let system = new Map();
+	// todo: handle case if path not exists
 	if (result.status) {
 		console.error('Error getting interfaces from system', result.stderr.toString());
 	} else {
@@ -104,70 +105,70 @@ var loadConfigFromDisk = function (dir) {
 
 	let fconf = new Map();
 	for (let i in stateFiles) {
-		let filePath = stateFiles[i];
+		let fileName = stateFiles[i];
 		// fileName is in the form of "command-name@interface.json" (e.g. access-point@wlan0.json)
-		if (filePath.substr(-5) === '.json') {
-			let fileName = filePath.slice(0, -5).split('@');
-			let iface = fileName[1];
+		if (fileName.substr(-5) === '.json') {
+			let fileNameParts = fileName.slice(0, -5).split('@');
+			let iface = fileNameParts[1];
 			if (!iface) {
-				console.error(`invalid filename "${filePath}" in fconf configuration folder`);
+				console.error(`invalid filename "${fileName}" in fconf configuration folder`);
 				continue;
 			}
-			let fileData = fs.readFileSync(dir + '/' + filePath, {encoding: 'utf-8'});
-			let state = JSON.parse(fileData);
+			let fileData = fs.readFileSync(dir + '/' + fileName, {encoding: 'utf-8'});
+			let ifaceSettings = JSON.parse(fileData);
 			let mode = null;
-			let command = fileName[0];
-			switch (fileName[0]) {
+			let command = fileNameParts[0];
+			switch (command) {
 				case "access-point":
-					state.type = "wifi";
+					ifaceSettings.type = "wifi";
 					mode = "ap";
 					break;
 				case "wifi-client":
-					state.type = "wifi";
+					ifaceSettings.type = "wifi";
 					mode = "client";
 					break;
 				case "4g-ndis":
-					state.type = "4g";
+					ifaceSettings.type = "4g";
 					mode = "ndis";
 					break;
 				case "3g-ras":
-					state.type = "3g";
+					ifaceSettings.type = "3g";
 					mode = "ras";
 					break;
 				case "voice-channel":
-					state.type = "3g";
+					ifaceSettings.type = "3g";
 					mode = "voice";
-					if (state.enabled) {
-						if (state.config && state.config.number) { // these must exist
-							state.uiLabel = state.config.number;
+					if (ifaceSettings.enabled) {
+						if (ifaceSettings.config && ifaceSettings.config.number) { // these must exist
+							ifaceSettings.uiLabel = ifaceSettings.config.number;
 						}
 					}
 					break;
 				case "ethernet":
-					state.type = fileName[0];
+					ifaceSettings.type = command;
 			}
 
 			if (mode) {
 				// todo: fix this mess
-				fconf.set(iface, Object.assign(deviceProto.get(state.type), fconf.get(iface)));
+				fconf.set(iface, Object.assign(deviceProto.get(ifaceSettings.type), fconf.get(iface)));
 				fconf.set(iface, Object.assign(fconf.get(iface) ? fconf.get(iface) : {}, {
-					type: state.type,
+					type: ifaceSettings.type,
 					mode: mode,
 					[mode]: {
-						config: state.config,
+						config: ifaceSettings.config,
 						command: command,
 						defaults: fconf_defaults.get(command),
 					},
 				}));
 
 				if (!fconf.get(iface).enabled) {
-					fconf.get(iface).enabled = state.enabled;
+					fconf.get(iface).enabled = ifaceSettings.enabled;
 				}
 
 			} else {
-				state.defaults = fconf_defaults.get(command);
-				state.command = command;
-				fconf.set(iface, Object.assign(fconf.get(iface) ? fconf.get(iface) : {}, state));
+				ifaceSettings.defaults = fconf_defaults.get(command);
+				ifaceSettings.command = command;
+				fconf.set(iface, Object.assign(fconf.get(iface) ? fconf.get(iface) : {}, ifaceSettings));
 			}
 		}
 	}
